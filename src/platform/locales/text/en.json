@@ -1,4 +1,7 @@
 {
+  "Implements {names}": "Implements {names}",
+  "Extends {names}": "Extends {names}",
+  "Choose Supertypes of {name} ({count} found)": "Choose Supertypes of {name} ({count} found)",
   "Separate Procedures and Functions": "Separate Procedures and Functions",
   "Shared JDT LS is available only in local ordinary project windows. Select Local machine for the Java language server to use it.": "Shared JDT LS is available only in local ordinary project windows. Select Local machine for the Java language server to use it.",
   "Share JDT LS across builds": "Share JDT LS across builds",

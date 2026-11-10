@@ -3940,7 +3940,7 @@
   "Implemented and overridden": "Zaimplementowane i nadpisane",
   "Implementing and overriding": "Implementowanie i nadpisywanie",
   "Implemented and overridden declarations": "Zaimplementowane i nadpisane deklaracje",
-  "Implementing and overriding methods": "Metody implementujące i nadpisujące",
+  "Implementing and overriding declarations": "Deklaracje implementujące i nadpisujące",
   "Replace all {count} occurrences": "Zastąp wszystkie wystąpienia ({count})",
   "↵ Apply · Esc Keep '{name}'": "↵ Zastosuj · Esc Zachowaj '{name}'",
   " (in {files} files)": " (w plikach: {files})",

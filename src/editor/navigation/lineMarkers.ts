@@ -4,7 +4,7 @@
  * icon, from the language server's answers (implementation requests and the
  * type hierarchy). Pure; the gutter itself is `implementationGutter`.
  */
-import type { Location, OutlineItem, SymbolKind } from "@/platform/ipc";
+import type { HierarchyItem, Location, OutlineItem, SymbolKind } from "@/platform/ipc";
 import { tx } from "@/platform/i18n";
 import { targetLabel } from "@/editor/lsp/files";
 import { baseName, type SuperMethod } from "./structureNav";
@@ -30,11 +30,13 @@ export interface MarkerCandidate {
   line: number;
   col: number;
   method: boolean;
+  /** A type declared as an interface / trait rather than a class. */
+  interfaceType: boolean;
   /** Declared abstract: an interface / trait, a member of one, or marked `abstract`. */
   abstract: boolean;
   /** Can have implementations / overriders (asked with an implementation request). */
   inheritable: boolean;
-  /** Can implement / override a supertype's method (looked up in the type hierarchy). */
+  /** Can extend / implement / override a supertype (looked up in the type hierarchy). */
   overriding: boolean;
   /** Identifier position of the enclosing type (methods). */
   owner: { line: number; col: number } | null;
@@ -63,6 +65,8 @@ const NOT_OVERRIDING = /\b(private|static)\b/;
 const ABSTRACT = /\babstract\b/;
 /** An interface method with a body (Java `default`). */
 const DEFAULT = /\bdefault\b/;
+/** Implicit roots every class inherits from; never worth a marker. */
+const IMPLICIT_ROOTS = new Set(["Object", "object", "Any"]);
 
 /** The declaration's text before its identifier (annotations and modifiers included). */
 function declarationPrefix(item: OutlineItem, lineText: (line: number) => string): string {
@@ -102,9 +106,10 @@ export function markerCandidates(
           line: at.line,
           col: at.col,
           method: false,
+          interfaceType: ABSTRACT_TYPES.has(it.kind),
           abstract: ABSTRACT_TYPES.has(it.kind) || ABSTRACT.test(p),
           inheritable: !NOT_INHERITABLE.test(p),
-          overriding: false,
+          overriding: true,
           owner: null,
         });
       } else if (it.kind === "method" && parent && MEMBER_OWNERS.has(parent.kind)) {
@@ -116,6 +121,7 @@ export function markerCandidates(
           line: at.line,
           col: at.col,
           method: true,
+          interfaceType: false,
           abstract: (inParent && !DEFAULT.test(p)) || ABSTRACT.test(p),
           inheritable: INHERITABLE_TYPES.has(parent.kind) && !NOT_INHERITABLE.test(p),
           overriding: !NOT_OVERRIDING.test(p),
@@ -215,5 +221,22 @@ export function supersMarker(
     targets: supers.map((s) => s.location),
     tooltip: implementing ? tx`Implements method in ${owners}` : tx`Overrides method in ${owners}`,
     chooserTitle: tx`Choose Super Method of ${c.name} (${supers.length} found)`,
+  };
+}
+
+/** ↑ marker of type `c` from the supertypes it extends / implements; null without any. */
+export function supertypeMarker(c: MarkerCandidate, supers: readonly HierarchyItem[]): LineMarker | null {
+  const declared = supers.filter((s) => !IMPLICIT_ROOTS.has(baseName(s.name)));
+  if (!declared.length) return null;
+  // A class implementing an interface; every other type extends its supertypes.
+  const implementing = !c.interfaceType && declared.some((s) => ABSTRACT_TYPES.has(s.kind));
+  const names = nameList(declared.map((s) => baseName(s.name)));
+  return {
+    kind: implementing ? "implementing" : "overriding",
+    line: c.line,
+    name: c.name,
+    targets: declared.map((s) => ({ path: s.path, range: s.selectionRange })),
+    tooltip: implementing ? tx`Implements ${names}` : tx`Extends ${names}`,
+    chooserTitle: tx`Choose Supertypes of ${c.name} (${declared.length} found)`,
   };
 }

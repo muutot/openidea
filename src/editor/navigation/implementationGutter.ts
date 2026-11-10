@@ -1,8 +1,8 @@
 /**
  * Gutter icons for inheritance: "is implemented / overridden" (↓) on types and
  * methods with implementations or overriders, "implements / overrides" (↑) on
- * methods with a super method. Clicking one navigates to its single target or
- * opens the targets chooser.
+ * types and methods with supertypes. Clicking one navigates to its single target
+ * or opens the targets chooser.
  *
  * Generic over language servers: ↓ comes from implementation requests (one
  * cancellable batch per pass), ↑ from the type hierarchy and the supertypes'
@@ -41,6 +41,7 @@ import {
   inheritorsMarker,
   markerCandidates,
   supersMarker,
+  supertypeMarker,
   withoutSelf,
   type LineMarker,
   type MarkerCandidate,
@@ -168,7 +169,12 @@ export async function fillMarkers(
       : [];
   const up =
     groups.has("supers") && !cache.unsupported.has("supers")
-      ? candidates.filter((c) => c.overriding && c.owner && cache.entries.get(candidateKey(c))?.supers === undefined)
+      ? candidates.filter(
+          (c) =>
+            c.overriding &&
+            (c.method ? c.owner !== null : true) &&
+            cache.entries.get(candidateKey(c))?.supers === undefined,
+        )
       : [];
 
   let implementations: Location[][] = [];
@@ -183,15 +189,49 @@ export async function fillMarkers(
       down.length = 0;
     }
   }
-  const supers: SuperMethod[][] = [];
-  for (const c of up) supers.push(await superMethodTargets(path, c.owner!, c.symbol, deps.supers));
+  // Some servers (Pyrefly) answer implementation requests with nothing while their
+  // type hierarchy still knows the subtypes: use it for the ↓ markers of types.
+  const subtypes = deps.supers.subtypes;
+  if (subtypes) {
+    await Promise.all(
+      down.map(async (c, i) => {
+        if (c.method || (implementations[i]?.length ?? 0)) return;
+        try {
+          const found = await subtypes(path, { line: c.line, col: c.col });
+          implementations[i] = found.map((s) => ({ path: s.path, range: s.selectionRange }));
+        } catch (e) {
+          if (isCancelled(e)) throw e;
+        }
+      }),
+    );
+  }
+  const methodSupers: SuperMethod[][] = [];
+  const typeSupers: HierarchyItem[][] = [];
+  for (const c of up) {
+    if (c.method) {
+      methodSupers.push(await superMethodTargets(path, c.owner!, c.symbol, deps.supers));
+    } else {
+      try {
+        typeSupers.push(await deps.supers.supertypes(path, { line: c.line, col: c.col }));
+      } catch (e) {
+        if (isCancelled(e)) throw e;
+        typeSupers.push([]);
+      }
+    }
+  }
 
   const files = await deps.readFiles([
     ...implementations.flat().map((l) => l.path),
-    ...supers.flat().map((s) => s.location.path),
+    ...methodSupers.flat().map((s) => s.location.path),
   ]);
   down.forEach((c, i) => (entry(c).inheritors = inheritorsMarker(c, implementations[i] ?? [], files)));
-  up.forEach((c, i) => (entry(c).supers = supersMarker(c, supers[i]!, files)));
+  let method = 0;
+  let type = 0;
+  for (const c of up) {
+    entry(c).supers = c.method
+      ? supersMarker(c, methodSupers[method++]!, files)
+      : supertypeMarker(c, typeSupers[type++]!);
+  }
 }
 
 /** Markers known for `candidates`, in document order (↓ before ↑ on a line). */
@@ -389,8 +429,10 @@ class MarkersPlugin {
 /** LSP access for one pass: this document's outline as known, others' opened on demand, each asked once. */
 function markerDeps(ctx: EditorDocContext, items: OutlineItem[], request: RequestId, cache: MarkerCache): MarkerDeps {
   const supertypes = new Map<string, Promise<HierarchyItem[]>>();
+  const subtypes = new Map<string, Promise<HierarchyItem[]>>();
   const outlines = new Map<string, Promise<OutlineItem[]>>([[ctx.path, Promise.resolve(items)]]);
-  const hierarchy = (doc: number, pos: Pos) => lspRequest(() => commands.lspTypeHierarchy(doc, pos, "incoming"));
+  const hierarchy = (doc: number, pos: Pos, direction: "incoming" | "outgoing") =>
+    lspRequest(() => commands.lspTypeHierarchy(doc, pos, direction));
   return {
     implementations: (positions) => lspRequest(() => commands.lspImplementations(request, ctx.doc, positions)),
     supers: {
@@ -400,13 +442,25 @@ function markerDeps(ctx: EditorDocContext, items: OutlineItem[], request: Reques
         if (!p) {
           p =
             path === ctx.path
-              ? hierarchy(ctx.doc, pos).catch((e) => {
+              ? hierarchy(ctx.doc, pos, "incoming").catch((e) => {
                   // No type hierarchy for this file: no ↑ markers until the server changes.
                   if (isUnavailable(e)) cache.unsupported.add("supers");
                   throw e;
                 })
-              : withDocument(path, (doc) => hierarchy(doc, pos));
+              : withDocument(path, (doc) => hierarchy(doc, pos, "incoming"));
           supertypes.set(key, p);
+        }
+        return p;
+      },
+      subtypes: (path, pos) => {
+        const key = `${path}:${pos.line}:${pos.col}`;
+        let p = subtypes.get(key);
+        if (!p) {
+          p =
+            path === ctx.path
+              ? hierarchy(ctx.doc, pos, "outgoing")
+              : withDocument(path, (doc) => hierarchy(doc, pos, "outgoing"));
+          subtypes.set(key, p);
         }
         return p;
       },

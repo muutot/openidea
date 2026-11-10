@@ -2,7 +2,8 @@
 .gutter :global(.cm-gutterElement) {
   display: flex;
   align-items: center;
-  justify-content: center;
+  /* Spare width stays left of the icons, which sit next to the code. */
+  justify-content: flex-end;
   gap: 1px;
 }
 .marker {

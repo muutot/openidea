@@ -605,7 +605,7 @@ const GUTTER = editorPage({
               t: "custom",
               label: "Implementing and overriding",
               keywords: ["super method", "overrides", "implements"],
-              component: () => <GutterGroup id="supers" label="Implementing and overriding methods" />,
+              component: () => <GutterGroup id="supers" label="Implementing and overriding declarations" />,
             },
             {
               t: "custom",

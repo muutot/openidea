@@ -19,7 +19,7 @@ vi.mock("@/editor/lsp/popupStore", async (orig) => ({
   openPopup: nav.openPopup,
 }));
 
-import { candidateKey, markerCandidates, type MarkerCandidate } from "./lineMarkers";
+import { candidateKey, markerCandidates, supertypeMarker, type MarkerCandidate } from "./lineMarkers";
 import { Text } from "@codemirror/state";
 import {
   affectsMarkers,
@@ -137,7 +137,7 @@ describe("marker candidates", () => {
   it("covers inheritable types and their methods, without private / static / final ones", () => {
     const shape = markerCandidates(SHAPE_OUTLINE, lines(SHAPE));
     expect(shape.map((c) => [c.name, c.abstract, c.inheritable, c.overriding])).toEqual([
-      ["Shape", true, true, false],
+      ["Shape", true, true, true],
       ["area", true, true, true],
       // A default method has a body: overriding it is not implementing it.
       ["label", false, true, true],
@@ -145,7 +145,7 @@ describe("marker candidates", () => {
     ]);
     const circle = markerCandidates(CIRCLE_OUTLINE, lines(CIRCLE));
     expect(circle.map((c) => [c.name, c.line, c.inheritable, c.overriding])).toEqual([
-      ["Circle", 0, true, false],
+      ["Circle", 0, true, true],
       ["area", 2, true, true],
       ["helper", 3, false, false],
       ["label", 4, false, true],
@@ -165,8 +165,12 @@ describe("marker candidates", () => {
 });
 
 /** A server answering implementation and type hierarchy requests over the files above. */
-function server(impls: Record<string, Location[]>, supers: Record<string, HierarchyItem[]>) {
-  const calls = { implementations: [] as Pos[][], supertypes: 0 };
+function server(
+  impls: Record<string, Location[]>,
+  supers: Record<string, HierarchyItem[]>,
+  subtypes: Record<string, HierarchyItem[]> = {},
+) {
+  const calls = { implementations: [] as Pos[][], supertypes: 0, subtypes: 0 };
   const outlines: Record<string, OutlineItem[]> = {
     [SHAPE_PATH]: SHAPE_OUTLINE,
     "/p/Circle.java": CIRCLE_OUTLINE,
@@ -181,6 +185,10 @@ function server(impls: Record<string, Location[]>, supers: Record<string, Hierar
       supertypes: async (p) => {
         calls.supertypes++;
         return supers[p] ?? [];
+      },
+      subtypes: async (p) => {
+        calls.subtypes++;
+        return subtypes[p] ?? [];
       },
       outline: async (p) => outlines[p] ?? [],
     },
@@ -236,6 +244,21 @@ describe("markers from server answers", () => {
     ]);
   });
 
+  it("uses the type hierarchy's subtypes when implementation requests are empty", async () => {
+    const circle: HierarchyItem = {
+      ...hier("Circle", "class", "/p/Circle.java"),
+      selectionRange: { start: { line: 0, col: 13 }, end: { line: 0, col: 19 } },
+    };
+    const { deps, calls } = server({}, {}, { "/p/Base.java": [circle] });
+    const candidates = markerCandidates(BASE_OUTLINE, lines(BASE));
+    const cache = emptyCache();
+    await fillMarkers("/p/Base.java", candidates, ALL, deps("/p/Base.java"), cache);
+    const markers = cachedMarkers(candidates, ALL, cache);
+    // Pyrefly answers implementation requests with nothing; the hierarchy still knows Circle.
+    expect(markers.map((m) => [m.line, m.kind, m.tooltip])).toEqual([[0, "implemented", "Is implemented by Circle"]]);
+    expect(calls.subtypes).toBeGreaterThan(0);
+  });
+
   it("marks implementing and overriding methods from the type hierarchy", async () => {
     const supers = {
       "/p/Circle.java": [hier("Base", "class", "/p/Base.java"), hier("Shape", "interface", SHAPE_PATH)],
@@ -248,12 +271,32 @@ describe("markers from server answers", () => {
     expect(
       markers.map((m) => [m.line, m.kind, m.tooltip, m.targets.map((t) => `${t.path}:${t.range.start.line}`)]),
     ).toEqual([
+      // The class itself extends Base and implements Shape.
+      [0, "implementing", "Implements Base, Shape", ["/p/Base.java:0", `${SHAPE_PATH}:0`]],
       [2, "implementing", "Implements method in Shape", [`${SHAPE_PATH}:1`]],
       // Base.label() and the default Shape.label() have bodies.
       [4, "overriding", "Overrides method in Base, Shape", ["/p/Base.java:2", `${SHAPE_PATH}:2`]],
     ]);
-    expect(markers[1]!.chooserTitle).toBe("Choose Super Method of label (2 found)");
+    expect(markers[0]!.chooserTitle).toBe("Choose Supertypes of Circle (2 found)");
+    expect(markers[2]!.chooserTitle).toBe("Choose Super Method of label (2 found)");
     expect(calls.supertypes).toBeGreaterThan(0);
+  });
+
+  it("marks inherited / implemented types, ignoring implicit roots", () => {
+    const circle = markerCandidates(CIRCLE_OUTLINE, lines(CIRCLE))[0]!;
+    expect(
+      supertypeMarker(circle, [hier("Base", "class", "/p/Base.java"), hier("Shape", "interface", SHAPE_PATH)]),
+    ).toMatchObject({
+      kind: "implementing",
+      line: 0,
+      tooltip: "Implements Base, Shape",
+      chooserTitle: "Choose Supertypes of Circle (2 found)",
+    });
+    // Every class implicitly extends Object; that is not worth an icon.
+    expect(supertypeMarker(circle, [hier("Object", "class", "/j/Object.java")])).toBeNull();
+    // An interface extending another interface overrides it.
+    const shape = markerCandidates(SHAPE_OUTLINE, lines(SHAPE))[0]!;
+    expect(supertypeMarker(shape, [hier("Named", "interface", "/p/Named.java")])?.kind).toBe("overriding");
   });
 
   it("asks once per document version and only for enabled groups", async () => {

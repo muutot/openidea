@@ -3946,7 +3946,7 @@
   "Implemented and overridden": "Implementado e sobrescrito",
   "Implementing and overriding": "Implementando e sobrescrevendo",
   "Implemented and overridden declarations": "Declarações implementadas e sobrescritas",
-  "Implementing and overriding methods": "Métodos que implementam e sobrescrevem",
+  "Implementing and overriding declarations": "Declarações que implementam e sobrescrevem",
   "Replace all {count} occurrences": "Substituir todas as {count} ocorrências",
   "↵ Apply · Esc Keep '{name}'": "↵ Aplicar · Esc Manter '{name}'",
   " (in {files} files)": " (em {files} arquivos)",

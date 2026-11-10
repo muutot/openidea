@@ -3840,7 +3840,7 @@
   "Implemented and overridden": "Implémenté et redéfini",
   "Implementing and overriding": "Implémentant et redéfinissant",
   "Implemented and overridden declarations": "Déclarations implémentées et redéfinies",
-  "Implementing and overriding methods": "Méthodes implémentant et redéfinissant",
+  "Implementing and overriding declarations": "Déclarations implémentant et redéfinissant",
   "Replace all {count} occurrences": "Remplacer les {count} occurrences",
   "↵ Apply · Esc Keep '{name}'": "↵ Appliquer · Échap Conserver '{name}'",
   " (in {files} files)": " (dans {files} fichiers)",

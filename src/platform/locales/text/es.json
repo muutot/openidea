@@ -3981,7 +3981,7 @@
   "Implementing and overriding": "Que implementan y sobrescriben",
   "Implemented and overridden declarations": "Declaraciones implementadas y sobrescritas",
   "Color preview": "Vista previa de color",
-  "Implementing and overriding methods": "Métodos que implementan y sobrescriben",
+  "Implementing and overriding declarations": "Declaraciones que implementan y sobrescriben",
   "Replace all {count} occurrences": "Reemplazar todas las {count} coincidencias",
   "↵ Apply · Esc Keep '{name}'": "↵ Aplicar · Esc Conservar '{name}'",
   " (in {files} files)": " (en {files} archivos)",
