@@ -226,7 +226,9 @@ export function supersMarker(
 
 /** ↑ marker of type `c` from the supertypes it extends / implements; null without any. */
 export function supertypeMarker(c: MarkerCandidate, supers: readonly HierarchyItem[]): LineMarker | null {
-  const declared = supers.filter((s) => !IMPLICIT_ROOTS.has(baseName(s.name)));
+  // Servers may qualify the root's name (`java.lang.Object`); the simple name is what counts.
+  const rootName = (s: HierarchyItem) => baseName(s.name).split(/[.:]/).pop() ?? "";
+  const declared = supers.filter((s) => !IMPLICIT_ROOTS.has(rootName(s)));
   if (!declared.length) return null;
   // A class implementing an interface; every other type extends its supertypes.
   const implementing = !c.interfaceType && declared.some((s) => ABSTRACT_TYPES.has(s.kind));

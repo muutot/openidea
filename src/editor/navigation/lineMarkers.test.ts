@@ -294,6 +294,8 @@ describe("markers from server answers", () => {
     });
     // Every class implicitly extends Object; that is not worth an icon.
     expect(supertypeMarker(circle, [hier("Object", "class", "/j/Object.java")])).toBeNull();
+    // The same root qualified by its package (jdtls reports `java.lang.Object`).
+    expect(supertypeMarker(circle, [hier("java.lang.Object", "class", "/j/Object.java")])).toBeNull();
     // An interface extending another interface overrides it.
     const shape = markerCandidates(SHAPE_OUTLINE, lines(SHAPE))[0]!;
     expect(supertypeMarker(shape, [hier("Named", "interface", "/p/Named.java")])?.kind).toBe("overriding");

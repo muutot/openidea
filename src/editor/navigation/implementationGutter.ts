@@ -169,12 +169,7 @@ export async function fillMarkers(
       : [];
   const up =
     groups.has("supers") && !cache.unsupported.has("supers")
-      ? candidates.filter(
-          (c) =>
-            c.overriding &&
-            (c.method ? c.owner !== null : true) &&
-            cache.entries.get(candidateKey(c))?.supers === undefined,
-        )
+      ? candidates.filter((c) => c.overriding && cache.entries.get(candidateKey(c))?.supers === undefined)
       : [];
 
   let implementations: Location[][] = [];
