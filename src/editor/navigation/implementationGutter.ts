@@ -205,33 +205,29 @@ export async function fillMarkers(
       }),
     );
   }
-  const methodSupers: SuperMethod[][] = [];
-  const typeSupers: HierarchyItem[][] = [];
-  for (const c of up) {
-    if (c.method) {
-      methodSupers.push(await superMethodTargets(path, c.owner!, c.symbol, deps.supers));
-    } else {
-      try {
-        typeSupers.push(await deps.supers.supertypes(path, { line: c.line, col: c.col }));
-      } catch (e) {
-        if (isCancelled(e)) throw e;
-        typeSupers.push([]);
-      }
-    }
-  }
+  // Ask every ↑ candidate in parallel; a failed answer is empty, cancellation still propagates.
+  const supers = await Promise.all(
+    up.map((c): Promise<SuperMethod[] | HierarchyItem[]> =>
+      c.method
+        ? superMethodTargets(path, c.owner!, c.symbol, deps.supers)
+        : deps.supers.supertypes(path, { line: c.line, col: c.col }).catch((e) => {
+            if (isCancelled(e)) throw e;
+            return [];
+          }),
+    ),
+  );
 
   const files = await deps.readFiles([
     ...implementations.flat().map((l) => l.path),
-    ...methodSupers.flat().map((s) => s.location.path),
+    ...up.flatMap((c, i) => (c.method ? (supers[i] as SuperMethod[]).map((s) => s.location.path) : [])),
   ]);
   down.forEach((c, i) => (entry(c).inheritors = inheritorsMarker(c, implementations[i] ?? [], files)));
-  let method = 0;
-  let type = 0;
-  for (const c of up) {
-    entry(c).supers = c.method
-      ? supersMarker(c, methodSupers[method++]!, files)
-      : supertypeMarker(c, typeSupers[type++]!);
-  }
+  up.forEach(
+    (c, i) =>
+      (entry(c).supers = c.method
+        ? supersMarker(c, supers[i] as SuperMethod[], files)
+        : supertypeMarker(c, supers[i] as HierarchyItem[])),
+  );
 }
 
 /** Markers known for `candidates`, in document order (↓ before ↑ on a line). */
