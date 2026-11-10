@@ -29,7 +29,6 @@ plugins/
    ├─ ai-completion/          # inline completion over the network, secrets
    ├─ mybatis/                # navigation, gutter markers, completion across files
    ├─ csv-editor/             # custom editor sharing the text document
-   ├─ excalidraw/             # web view custom editor, file icons, a template
    ├─ graphviz/               # web view with code: live preview, problems from the page, a language
    ├─ regex-tester/           # html view talking to its code, settings, the editor's selection
    └─ license-header/         # file-opened events, quick fix, project scan in a task
@@ -37,7 +36,7 @@ sdk/rust/openidea-plugin/     # the Rust SDK (host API, Plugin trait, mock host)
 crates/ide-plugin/tests/fixtures/  # test plugins: hello, jobs, language-toy, misbehave, semantic-tokens, hover, commit, inlay-hints
 ```
 
-The plugin API is defined in [`wit/`](../wit/) (`openidea:plugin@1.4.0`, world
+The plugin API is defined in [`wit/`](../wit/) (`openidea:plugin@1.5.0`, world
 `plugin`).
 
 ## 1. Quick start
@@ -365,9 +364,19 @@ are always available. Calling a gated function without its capability returns
 
 ## 3. Writing code (Rust SDK)
 
+### API 1.5
+
+API 1.5.0 is planned for the next OpenIDEA release. Use
+`engines.openidea = "^1.5"` and the matching SDK. Released 1.4 plugins keep
+working. New in 1.5:
+
+- [Notifications for a project](#notifications-with-commands):
+  `Project::notify` shows a notification in a window of that project only,
+  also from scheduled or background work.
+
 ### API 1.4
 
-API 1.4.0 is planned for the next OpenIDEA release. Use
+API 1.4.0 shipped with OpenIDEA 0.1.40. Use
 `engines.openidea = "^1.4"` and the matching SDK. Released 1.3 plugins keep
 working. New in 1.4:
 
@@ -525,6 +534,7 @@ then run `openidea-plugin check`.
 | `host::output_append(channel, text)`, `output_clear`, `output_reveal`                                          | `output.{append,clear,reveal}`             | API 1.4: read-only Output tabs; 32 named channels per plugin, each a 1 MiB UTF-8 ring buffer. Reveal requires the invoking window.                                                                                                                                                                                                                        |
 | `host::set_context(key, value)`, `remove_context`                                                              | `ui.{set,remove}-context`                  | Sets `plugin.<id>.<key>` for `when` clauses in the window the call came from (`true`, `3.5`, `"text"`; `ContextValue`). Key 1–64 of `A-Za-z0-9_-`, 100 per plugin; gone when the plugin stops.                                                                                                                                                            |
 | `host::notify(level, title, body)`                                                                             | `ui.show-notification`                     | Balloon in the window the command or events came from (every window otherwise).                                                                                                                                                                                                                                                                           |
+| `Project::notify(level, title, body, actions)`                                                                 | `ui.notify-project`                        | API 1.5: balloon only in a window of that project (the most recently focused one), with or without an invoking window; see _Notifications with commands_.                                                                                                                                                                                                 |
 | `host::copy_to_clipboard(text)`                                                                                | `ui.copy-to-clipboard`                     | Copies `text` to the system clipboard. Needs `clipboard`.                                                                                                                                                                                                                                                                                                 |
 | `host::open_url(url)`                                                                                          | `ui.open-url`                              | Opens an `http://` or `https://` URL in the user's default browser.                                                                                                                                                                                                                                                                                       |
 | `host::pick(title, items)`, `pick_many`                                                                        | `ui.pick`, `ui.pick-many`                  | Picks key(s) from `PickItem`s, or `None` when dismissed. From a command/event or code-action resolution in its editor window (else `invalid`); waiting is excluded from the budget.                                                                                                                                                                       |
@@ -1502,11 +1512,10 @@ For example, a page can reserve the corner in its own toolbar:
 }
 ```
 
-`plugins/official/excalidraw` is a complete example: a Vite + React page in
-`web-src/`, built into `web/` by `plugins/build.sh`. `plugins/official/graphviz`
-pairs a page with code: the page renders (Graphviz compiled to WebAssembly) and
+`plugins/official/graphviz` is a complete example: a Vite + React page in
+`web-src/`, built into `web/` by `plugins/build.sh`, paired with code — the page renders (Graphviz compiled to WebAssembly) and
 sends what Graphviz reports to the plugin, which publishes it as problems. The built page is not
-checked in (it is tens of MB): run `plugins/build.sh official/excalidraw`
+checked in (it is tens of MB): run `plugins/build.sh official/graphviz`
 before installing the plugin from the repository.
 
 ### Web frame PTYs (API 1.3)
@@ -2254,8 +2263,8 @@ the API itself follows _Evolving the plugin API_ below.
 ## 10. Evolving the plugin API
 
 Released versions are frozen: 1.0.0 shipped with OpenIDEA 0.1.36, 1.1.0
-with 0.1.37, 1.2.0 with 0.1.38 and 1.3.0 with 0.1.39. API 1.4.0 is planned
-with the next release. wasmtime decides what stays compatible: it resolves interface names
+with 0.1.37, 1.2.0 with 0.1.38, 1.3.0 with 0.1.39 and 1.4.0 with 0.1.40.
+API 1.5.0 is planned with the next release. wasmtime decides what stays compatible: it resolves interface names
 by semver (a component importing `openidea:plugin/x@1.0.0` links against a
 host defining `@1.1.0`, and the host finds its exports the same way), but
 function types must match exactly — a record with another field count, or a
@@ -2382,6 +2391,29 @@ its normal editor and project context. No capability is needed. Invalid or
 undeclared actions reject the whole notification. Labels are limited to 256
 bytes and arguments to 64 KiB. Plain `host::notify` behaves as before.
 
+Both go to the window the command or event came from, or to every window when
+there is none (a scheduled call, for instance). To reach one project from such
+work, call `notify` on that [`Project`](#the-api) (API 1.5, `ui.notify-project`),
+with the same actions and limits:
+
+```rust
+for project in host::projects()? {
+    if let Some(update) = check_for_update(&project)? {
+        let disable = NotificationAction::new("Disable automatic checks", "disable-checks")
+            .argument(project.root()?);
+        project.notify(NotificationLevel::Info, "Update available", &update, &[disable])?;
+    }
+}
+```
+
+- It shows only in a window of that project: the most recently focused one
+  when the project is open in several.
+- A button runs its command with an invocation from that window, so
+  `ctx.project()` is the notification's project.
+- If the project has closed by the time of the call, the call fails with
+  `Error::NotFound` and shows nothing; it never falls back to another window.
+  A balloon already shown goes away with its window.
+
 ### Selecting plugin tests (API 1.4, unreleased)
 
 A plugin using `framework = "plugin"` can implement `TestResults::select_tests`
@@ -2430,6 +2462,28 @@ The host constructs argv directly, without a shell:
 DDEV, for example: `program = "ddev"`, `args = ["exec"]`,
 `commands = [("composer", ["composer"])]` runs `php x.php` as
 `ddev exec php x.php` and `composer install` as `ddev composer install`.
+
+API 1.5 adds `host::register_run_target_with_overrides(project, target)` and
+`PluginRunTargetWithOverrides`. Its `commands` are `PluginCommandOverride` records
+with `name`, replacement `args`, and optional `workdir_args`. `None` inherits the
+shared list; `Some(vec![])` omits it; `Some(args)` replaces it for that command.
+The original `PluginRunTarget` and registration function keep their API 1.4 behavior.
+
+For a target with `program = "ddev"`, `args = ["exec", "--raw"]`,
+`workdir_args = ["--dir={cwd}", "--"]` and `container_root = "/var/www/html"`, use:
+
+```rust
+PluginCommandOverride {
+    name: "composer".into(),
+    args: vec!["composer".into()],
+    workdir_args: Some(vec![]),
+}
+```
+
+With working directory `public`, `composer install` becomes `ddev composer install`,
+while `php x.php` becomes `ddev exec --raw --dir=/var/www/html/public -- php x.php`.
+Replacement lists have the same argument limits, placeholder substitution and
+working-directory restrictions as the shared list.
 
 Local absolute tool paths outside the project use the tool basename.
 When `container_root` is set, project paths in argv map under that root. Each
@@ -2484,6 +2538,39 @@ The virtual URI identifies its originating server, including for document links
 and diagnostic-related locations. Navigation inside these documents returns to
 that server; editing and saving
 are disabled. No WIT signature change is needed for this opt-in host setting.
+
+### Validating run targets (API 1.5)
+
+A plugin can export `run-target-validation.validate` to check current project
+runtime state immediately before Run, Test or Debug. In the Rust SDK implement
+`RunTargetValidation` and add `run_target_validation` to `register_plugin!`:
+
+```rust
+impl RunTargetValidation for MyPlugin {
+    fn validate(&mut self, project: &str, target_id: &str, launch: &RunTargetLaunch) -> Result<(), String> {
+        // Inspect runtime state through the plugin's granted APIs.
+        if runtime_is_running(project) { Ok(()) } else { Err("Project runtime is stopped".into()) }
+    }
+}
+register_plugin!(MyPlugin, run_target_validation);
+```
+
+The callback receives the project root, the plugin's own target id and
+`RunTargetLaunch { operation, program, cwd }`. `operation` is Run, Debug or Test;
+`program` is the bare program being wrapped, and `cwd` is the absolute local
+working directory on the plugin's machine. Arguments and environment are omitted.
+Trust, target ownership, process grants and executable pins are checked first.
+No extra manifest contribution or capability is required; plugins without the
+export retain their existing behavior. Language server startup and target document
+reads do not invoke this user-launch gate.
+
+`Err(message)` refuses startup through the normal launch error path, prefixed
+with the plugin name and bounded to 4096 bytes. The registration and selected
+target remain unchanged. A trap or timeout also refuses startup; cancellation
+interrupts the callback. Calls wake idle-reclaimed instances and use the host's
+normal call timeout (five seconds by default). For remote projects validation
+runs on the server, alongside the plugin and wrapper. Native SDK tests can use
+`MockHost::validate_run_target` to invoke their validator.
 
 ### Debugging run targets
 
