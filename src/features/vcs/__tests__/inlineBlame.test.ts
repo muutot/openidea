@@ -278,7 +278,7 @@ describe("current line decoration", () => {
     await tick();
     // the widget measures, and starts observing, in the task after its insertion
     await vi.advanceTimersByTimeAsync(10);
-    expect(hint()!.style.marginLeft).toBe("");
+    expect(hint()!.style.paddingLeft).toBe("");
 
     // the hint shows up only after the blame mounted — the blame must still step past it
     view.dispatch({
@@ -288,11 +288,11 @@ describe("current line decoration", () => {
     });
     await vi.advanceTimersByTimeAsync(10);
     expect(view.dom.querySelector(".cm-openidea-lensInlineInner")).not.toBeNull();
-    expect(hint()!.style.marginLeft).toBe("calc(3ch + 120px)");
+    expect(hint()!.style.paddingLeft).toBe("calc(3ch + 120px)");
 
     // and it gives the space back when the hint goes away
     view.dispatch({ effects: lens.reconfigure([]) });
     await vi.advanceTimersByTimeAsync(10);
-    expect(hint()!.style.marginLeft).toBe("");
+    expect(hint()!.style.paddingLeft).toBe("");
   });
 });

@@ -92,8 +92,9 @@ class BlameWidget extends WidgetType {
     const width = hint ? Math.round(hint.getBoundingClientRect().width) : 0;
     if (width === this.appliedWidth) return;
     this.appliedWidth = width;
-    // A blank line has no code to separate from: no gap, so the caret stays at the line start.
-    el.style.marginLeft = this.blank ? "0" : width ? `calc(3ch + ${width}px)` : "";
+    // Padding, not margin: the gap is virtual (it only moves the label), so the caret at the
+    // line end stays next to the code. A blank line has no code to separate from: no gap.
+    el.style.paddingLeft = this.blank ? "0" : width ? `calc(3ch + ${width}px)` : "";
   }
 
   toDOM() {
@@ -304,7 +305,7 @@ export function inlineBlame(ctx: EditorDocContext): Extension {
     EditorView.baseTheme({
       ".cm-vcs-inline-blame": {
         color: "var(--fg-inlay)",
-        marginLeft: "3ch",
+        paddingLeft: "3ch",
         display: "inline-block",
         maxWidth: "min(60ch, 50vw)",
         overflow: "hidden",
@@ -315,7 +316,7 @@ export function inlineBlame(ctx: EditorDocContext): Extension {
       },
       // An empty line has no code to separate from: the label sits at the line start, so the
       // caret stays at column 0 instead of jumping past the gap.
-      ".cm-vcs-inline-blame-blank": { marginLeft: "0" },
+      ".cm-vcs-inline-blame-blank": { paddingLeft: "0" },
       '.cm-vcs-inline-blame[role="button"]': { cursor: "pointer" },
       ".cm-vcs-inline-blame-tooltip": {
         padding: "8px 12px",
