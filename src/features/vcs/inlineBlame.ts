@@ -66,12 +66,20 @@ class BlameWidget extends WidgetType {
   private appliedWidth = -1;
   private observer: MutationObserver | undefined;
 
-  constructor(readonly line: BlameLine) {
+  constructor(
+    readonly line: BlameLine,
+    /** The annotated line has no text: no gap before the label, or the caret would look indented. */
+    readonly blank: boolean,
+  ) {
     super();
   }
 
   eq(other: BlameWidget) {
-    return formatInlineBlame(other.line) === formatInlineBlame(this.line) && other.line.commit === this.line.commit;
+    return (
+      this.blank === other.blank &&
+      formatInlineBlame(other.line) === formatInlineBlame(this.line) &&
+      other.line.commit === this.line.commit
+    );
   }
 
   /**
@@ -84,12 +92,13 @@ class BlameWidget extends WidgetType {
     const width = hint ? Math.round(hint.getBoundingClientRect().width) : 0;
     if (width === this.appliedWidth) return;
     this.appliedWidth = width;
-    el.style.marginLeft = width ? `calc(3ch + ${width}px)` : "";
+    // A blank line has no code to separate from: no gap, so the caret stays at the line start.
+    el.style.marginLeft = this.blank ? "0" : width ? `calc(3ch + ${width}px)` : "";
   }
 
   toDOM() {
     const el = document.createElement("span");
-    el.className = "cm-vcs-inline-blame";
+    el.className = this.blank ? "cm-vcs-inline-blame cm-vcs-inline-blame-blank" : "cm-vcs-inline-blame";
     el.textContent = formatInlineBlame(this.line);
     el.contentEditable = "false";
     // The element is only measurable once CodeMirror has inserted it: defer to the next task, not a
@@ -221,7 +230,10 @@ export function inlineBlame(ctx: EditorDocContext): Extension {
             return;
           this.line = lines[caret.number - 1];
           if (this.line) {
-            const widget = Decoration.widget({ widget: new BlameWidget(this.line), side: 1 }).range(caret.to);
+            const widget = Decoration.widget({
+              widget: new BlameWidget(this.line, caret.text.trim().length === 0),
+              side: 1,
+            }).range(caret.to);
             this.view.dispatch({ effects: setInlineBlame.of(Decoration.set([widget])) });
           }
         } catch {
@@ -301,6 +313,9 @@ export function inlineBlame(ctx: EditorDocContext): Extension {
         verticalAlign: "bottom",
         userSelect: "none",
       },
+      // An empty line has no code to separate from: the label sits at the line start, so the
+      // caret stays at column 0 instead of jumping past the gap.
+      ".cm-vcs-inline-blame-blank": { marginLeft: "0" },
       '.cm-vcs-inline-blame[role="button"]': { cursor: "pointer" },
       ".cm-vcs-inline-blame-tooltip": {
         padding: "8px 12px",
