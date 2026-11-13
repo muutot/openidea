@@ -10,6 +10,8 @@ import { fontWeightVars, type CustomColorSchemes, type TextAttributesOverride } 
 import {
   ATTRIBUTES,
   SCHEMES,
+  EFFECT_CSS,
+  attributeStyleVar,
   overrideDeclarations,
   effectiveScheme,
   resolvedSchemeTokens,
@@ -136,11 +138,28 @@ function previewVars(
 
 /** Text styled like an attribute in the preview. */
 function tokenStyle(attr: AttributeDef | undefined): CSSProperties {
-  if (!attr?.token)
-    return {
-      ...(attr?.fg ? { color: `var(${attr.fg})` } : null),
-      ...(attr?.bg ? { backgroundColor: `var(${attr.bg})` } : null),
+  if (!attr?.token) {
+    if (!attr) return {};
+    const base: CSSProperties = {
+      ...(attr.fg ? { color: `var(${attr.fg})` } : null),
+      ...(attr.bg ? { backgroundColor: `var(${attr.bg})` } : null),
     };
+    if (!attr.textStyle) return base;
+    const v = attributeStyleVar(attr);
+    const effectColor = `var(${attr.effect ?? attr.fg ?? "--fg-muted"})`;
+    const effect: TextAttributesOverride["effect"] = attr.defaultEffect ?? (attr.effect ? "wave" : undefined);
+    const decoration =
+      effect && effect !== "none" ? `var(${v}-effect, ${EFFECT_CSS[effect]?.(effectColor) ?? "none"})` : undefined;
+    return {
+      ...base,
+      fontWeight:
+        `var(${v}-bold, ${attr.defaultBold ? "var(--fw-code-bold, 700)" : "inherit"})` as CSSProperties["fontWeight"],
+      fontStyle: `var(${v}-italic, ${attr.defaultItalic ? "italic" : "inherit"})`,
+      ...(decoration
+        ? { textDecoration: decoration, ...({ WebkitTextDecoration: decoration } as CSSProperties) }
+        : null),
+    };
+  }
   if (attr.italicOnly)
     return { fontStyle: `var(--syn-${attr.token}-italic, ${attr.defaultItalic === false ? "normal" : "italic"})` };
   const t = attr.token;
@@ -184,6 +203,11 @@ const SAMPLES: Record<string, CodeSample> = {
         ["could be const", "weakWarning"],
         ["   ", "text"],
         ["legacyCall", "unused"],
+      ],
+      [
+        ["typo", "typo"],
+        ["   ", "text"],
+        ["deprecatedCall", "deprecated"],
       ],
       [
         ["bad\u203dchar", "invalid"],
@@ -986,7 +1010,7 @@ function AttributeEditor({
           />
         </div>
       )}
-      {attr.token && !attr.italicOnly && (
+      {(attr.token || attr.textStyle) && !attr.italicOnly && (
         <>
           <div className={styles.attrRow}>
             <Checkbox
@@ -1018,34 +1042,20 @@ function AttributeEditor({
           onChange={(c) => set({ background: c })}
         />
       )}
-      {attr.effect && (
-        <ColorRow
-          label="Effects"
-          value={v.effectColor}
-          inherited={inherited.effectColor}
-          onChange={(c) => set({ effectColor: c })}
-        />
-      )}
-      {attr.token && !attr.italicOnly && (
+      {(attr.token || attr.textStyle) && !attr.italicOnly && (
         <>
           <div className={styles.attrRow}>
             <Checkbox
-              checked={!!(v.effect ?? inherited.effect) && (v.effect ?? inherited.effect) !== "none"}
+              checked={(v.effect ?? inherited.effect ?? "none") !== "none"}
               onChange={(b) =>
                 set({
-                  effect: b
-                    ? inherited.effect && inherited.effect !== "none"
-                      ? inherited.effect
-                      : "underline"
-                    : inherited.effect && inherited.effect !== "none"
-                      ? "none"
-                      : undefined,
+                  effect: b ? (inherited.effect && inherited.effect !== "none" ? inherited.effect : "wave") : "none",
                   effectColor: b ? v.effectColor : undefined,
                 })
               }
               label="Effects"
             />
-            {!!(v.effect ?? inherited.effect) && (v.effect ?? inherited.effect) !== "none" && (
+            {(v.effect ?? inherited.effect ?? "none") !== "none" && (
               <ColorInput
                 value={v.effectColor ?? inherited.effectColor ?? "#808080"}
                 onChange={(c) => set({ effectColor: c ?? "#808080" })}
@@ -1053,7 +1063,7 @@ function AttributeEditor({
               />
             )}
           </div>
-          {!!(v.effect ?? inherited.effect) && (v.effect ?? inherited.effect) !== "none" && (
+          {(v.effect ?? inherited.effect ?? "none") !== "none" && (
             <Select
               value={(v.effect ?? inherited.effect)!}
               options={[
@@ -1444,23 +1454,25 @@ function ColorSchemePage({ scopes, landing }: { scopes: readonly string[]; landi
                     const attr = attrId !== undefined ? A(attrId) : undefined;
                     const inPage = attr !== undefined && ids.has(attrId!);
                     return (
-                      <span
-                        key={j}
-                        style={tokenStyle(attr)}
-                        className={attr ? styles.clickable : undefined}
-                        onClick={
-                          attr
-                            ? () => {
-                                if (inPage) reveal(attrId!);
-                                else {
-                                  crossPageReveal = attrId!;
-                                  selectPage(attrPageId(attr));
+                      <span key={j}>
+                        <span
+                          style={tokenStyle(attr)}
+                          className={attr ? styles.clickable : undefined}
+                          title={attr ? translate(attr.name) : undefined}
+                          onClick={
+                            attr
+                              ? () => {
+                                  if (inPage) reveal(attrId!);
+                                  else {
+                                    crossPageReveal = attrId!;
+                                    selectPage(attrPageId(attr));
+                                  }
                                 }
-                              }
-                            : undefined
-                        }
-                      >
-                        {text}
+                              : undefined
+                          }
+                        >
+                          {text}
+                        </span>
                       </span>
                     );
                   })}

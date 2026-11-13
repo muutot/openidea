@@ -31,6 +31,8 @@ export interface AttributeDef {
   token?: string;
   /** A semantic modifier whose only configurable attribute is italic. */
   italicOnly?: boolean;
+  /** Editable bold / italic / effects without a syntax token (errors, warnings, typos). */
+  textStyle?: boolean;
   defaultBold?: boolean;
   defaultItalic?: boolean;
   defaultEffect?: TextAttributesOverride["effect"];
@@ -126,10 +128,52 @@ const BASE_ATTRIBUTES: readonly AttributeDef[] = [
     path: ["General", "Search Results"],
     bg: "--bg-search-match-current",
   },
-  { id: "error", name: "Error", path: ["General", "Errors and Warnings"], effect: "--wave-error" },
-  { id: "warning", name: "Warning", path: ["General", "Errors and Warnings"], effect: "--wave-warning" },
-  { id: "weakWarning", name: "Weak warning", path: ["General", "Errors and Warnings"], fg: "--fg-weak-warning" },
-  { id: "unused", name: "Unused symbol", path: ["General", "Errors and Warnings"], fg: "--fg-unused" },
+  {
+    id: "error",
+    name: "Error",
+    path: ["General", "Errors and Warnings"],
+    effect: "--wave-error",
+    defaultEffect: "wave",
+    textStyle: true,
+  },
+  {
+    id: "warning",
+    name: "Warning",
+    path: ["General", "Errors and Warnings"],
+    effect: "--wave-warning",
+    defaultEffect: "wave",
+    textStyle: true,
+  },
+  {
+    id: "weakWarning",
+    name: "Weak warning",
+    path: ["General", "Errors and Warnings"],
+    fg: "--fg-weak-warning",
+    textStyle: true,
+  },
+  {
+    id: "typo",
+    name: "Typo",
+    path: ["General", "Errors and Warnings"],
+    effect: "--wave-typo",
+    defaultEffect: "wave",
+    textStyle: true,
+  },
+  {
+    id: "unused",
+    name: "Unused symbol",
+    path: ["General", "Errors and Warnings"],
+    fg: "--fg-unused",
+    textStyle: true,
+  },
+  {
+    id: "deprecated",
+    name: "Deprecated symbol",
+    path: ["General", "Errors and Warnings"],
+    fg: "--fg-deprecated",
+    defaultEffect: "strikeout",
+    textStyle: true,
+  },
   syn("invalid", "Bad character", ["General", "Errors and Warnings"], "invalid"),
   syn("todo", "TODO defaults", ["General", "Code"], "todo"),
   { id: "inlineValue", name: "Inline debugger values", path: ["Debugger"], fg: "--syn-inline-value" },
@@ -402,12 +446,17 @@ export function boldWeight(bold: boolean): string {
   return bold ? "var(--fw-code-bold, 700)" : "var(--fw-code, 400)";
 }
 
-const EFFECT_CSS: Record<string, (c: string) => string> = {
+export const EFFECT_CSS: Record<string, (c: string) => string> = {
   underline: (c) => `underline ${c}`,
   wave: (c) => `underline wavy ${c}`,
   strikeout: (c) => `line-through ${c}`,
   none: () => "none",
 };
+
+/** CSS variable stem holding an attribute's bold / italic / effect style (`--attr-weak-warning-…`). */
+export function attributeStyleVar(attr: AttributeDef): string {
+  return `--attr-${attr.id.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+}
 
 /** Explicitly removes a scheme colour; unlike an unset field, this must survive as an override. */
 export const CLEAR_COLOR = "transparent";
@@ -432,9 +481,21 @@ export function overrideDeclarations(
     }
     if (setOrCleared(o.background) && attr.bg) out.push([attr.bg, o.background]);
     if (setOrCleared(o.effectColor) && attr.effect) out.push([attr.effect, o.effectColor]);
-    if (attr.effect && setOrCleared(o.effectColor)) {
-      if (attr.id === "error") out.push(["--editor-error-decoration", `underline wavy ${o.effectColor}`]);
-      if (attr.id === "warning") out.push(["--editor-warning-decoration", `underline wavy ${o.effectColor}`]);
+    if (attr.effect && (setOrCleared(o.effectColor) || o.effect)) {
+      const style = o.effect && o.effect !== "none" ? o.effect : "wave";
+      const color = setOrCleared(o.effectColor) ? o.effectColor! : `var(${attr.effect})`;
+      const decoration = EFFECT_CSS[style]?.(color) ?? "none";
+      if (attr.id === "error") out.push(["--editor-error-decoration", decoration]);
+      if (attr.id === "warning") out.push(["--editor-warning-decoration", decoration]);
+    }
+    if (attr.textStyle) {
+      const v = attributeStyleVar(attr);
+      if (o.bold !== undefined) out.push([`${v}-bold`, boldWeight(o.bold)]);
+      if (o.italic !== undefined) out.push([`${v}-italic`, o.italic ? "italic" : "normal"]);
+      if (o.effect) {
+        const color = setOrCleared(o.effectColor) ? o.effectColor! : `var(${attr.effect ?? attr.fg ?? "--fg-muted"})`;
+        out.push([`${v}-effect`, EFFECT_CSS[o.effect]?.(color) ?? "none"]);
+      }
     }
     if (attr.token) {
       const t = attr.token;
@@ -559,6 +620,10 @@ export function resolvedAttribute(
       vars.get(`--syn-${token}-italic`) ?? (token === "comment" ? vars.get("--syn-comment-style") : undefined);
     out.italic = own?.italic ?? italicFromCss(italicCss) ?? attr.defaultItalic ?? false;
   } else if (effect) out.effect = effect;
+  if (!token && attr.textStyle) {
+    out.bold = own?.bold ?? attr.defaultBold ?? false;
+    out.italic = own?.italic ?? attr.defaultItalic ?? false;
+  }
   if (token && effect) out.effect = effect;
   return out;
 }
