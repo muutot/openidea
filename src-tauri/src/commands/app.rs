@@ -189,22 +189,45 @@ pub fn settings_get_global(state: State<'_, AppState>) -> Settings {
 #[specta::specta]
 pub fn settings_set(
     window: Window,
-    state: State<'_, AppState>,
+    app: tauri::AppHandle,
     scope: SettingsScope,
     key: String,
     value: String,
 ) -> IdeResult<Settings> {
-    let applied = ide_host::ops::project::set_settings(&state.host, window.label(), scope, &key, &value)?;
+    let window = window.label().to_owned();
+    // `Settings` is a wide struct: deserializing the merged stack (the validation
+    // `SettingsStore::set` runs) needs more stack than an IPC callback leaves on the
+    // main thread, so the write runs on its own thread.
+    std::thread::Builder::new()
+        .name("settings-set".into())
+        .stack_size(16 * 1024 * 1024)
+        .spawn(move || {
+            let state = app.state::<AppState>();
+            settings_set_now(&state, &window, scope, &key, &value)
+        })
+        .map_err(|e| IdeError::internal(format!("settings worker: {e}")))?
+        .join()
+        .map_err(|_| IdeError::internal("settings worker panicked"))?
+}
+
+fn settings_set_now(
+    state: &AppState,
+    window: &str,
+    scope: SettingsScope,
+    key: &str,
+    value: &str,
+) -> IdeResult<Settings> {
+    let applied = ide_host::ops::project::set_settings(&state.host, window, scope, key, value)?;
     if key == "mcpServer" || key.starts_with("mcpServer.") {
-        crate::commands::mcp::apply(&state);
+        crate::commands::mcp::apply(state);
     }
     if !applied.project_scope {
         state.updates.wake.notify_one();
     }
     // A project value concerns only that project's window (and its settings window).
-    let event = ide_core::IdeEvent::SettingsChanged { key };
+    let event = ide_core::IdeEvent::SettingsChanged { key: key.to_owned() };
     if applied.project_scope {
-        let owner = AppState::owner_window(window.label());
+        let owner = AppState::owner_window(window);
         for label in [owner.to_owned(), crate::windows::settings_label(owner)] {
             let sink = crate::events::TauriSink { app: state.app.clone(), window: Some(label) };
             sink.emit(event.clone());
