@@ -294,6 +294,18 @@ describe("current line decoration", () => {
         return el;
       }
     }
+    /** Stands in for a plugin's line-end message: a zero-width anchor with a 90px inner box. */
+    class FakeMessage extends WidgetType {
+      toDOM() {
+        const el = document.createElement("span");
+        el.className = "cm-plugin-after";
+        const inner = document.createElement("span");
+        inner.textContent = "Typo: In word 'one'";
+        inner.getBoundingClientRect = () => ({ width: 90 }) as DOMRect;
+        el.appendChild(inner);
+        return el;
+      }
+    }
     const lens = new Compartment();
     view = new EditorView({
       parent: document.body,
@@ -305,16 +317,31 @@ describe("current line decoration", () => {
     expect(hint()!.style.paddingLeft).toBe("");
 
     // the hint shows up only after the blame mounted — the blame must still step past it
+    // (the hint's inner box sits 12px past its anchor)
     view.dispatch({
       effects: lens.reconfigure(
-        EditorView.decorations.of(Decoration.set([Decoration.widget({ widget: new FakeHint(), side: 1 }).range(0)])),
+        EditorView.decorations.of(Decoration.set([Decoration.widget({ widget: new FakeHint(), side: 1 }).range(3)])),
       ),
     });
     await vi.advanceTimersByTimeAsync(10);
     expect(view.dom.querySelector(".cm-openidea-lensInlineInner")).not.toBeNull();
-    expect(hint()!.style.paddingLeft).toBe("calc(3ch + 120px)");
+    expect(hint()!.style.paddingLeft).toBe("calc(3ch + 132px)");
 
-    // and it gives the space back when the hint goes away
+    // a plugin message between the hint and the blame adds its own width and 8px offset
+    view.dispatch({
+      effects: lens.reconfigure(
+        EditorView.decorations.of(
+          Decoration.set([
+            Decoration.widget({ widget: new FakeHint(), side: 1 }).range(3),
+            Decoration.widget({ widget: new FakeMessage(), side: 1 }).range(3),
+          ]),
+        ),
+      ),
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(hint()!.style.paddingLeft).toBe("calc(3ch + 230px)");
+
+    // and it gives the space back when they go away
     view.dispatch({ effects: lens.reconfigure([]) });
     await vi.advanceTimersByTimeAsync(10);
     expect(hint()!.style.paddingLeft).toBe("");

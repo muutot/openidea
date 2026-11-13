@@ -83,18 +83,30 @@ class BlameWidget extends WidgetType {
   }
 
   /**
-   * A code-vision hint drawn at the line end is out of flow (see codeLens.ts), so it does not make
-   * room for itself: step the blame past its measured width, as IDEA lays its line-end inlays out.
-   * The hint can also appear (or go away) after this widget mounted, hence the observer below.
+   * Line-end annotations stack left to right: the code-vision hint, a plugin's line-end message
+   * (Inspection Lens), then this label. The hint is out of flow (see codeLens.ts) and the message
+   * steps past the hint itself, so this one steps past both, as IDEA lays its line-end inlays out.
+   * They can also appear (or go away) after this widget mounted, hence the observer below.
    */
-  private stepPastHint(el: HTMLElement) {
-    const hint = el.closest(".cm-line")?.querySelector<HTMLElement>(".cm-openidea-lensInlineInner");
-    const width = hint ? Math.round(hint.getBoundingClientRect().width) : 0;
+  private stepPastLineEnd(el: HTMLElement) {
+    const line = el.closest(".cm-line");
+    if (!line) return;
+    let width = 0;
+    const hint = line.querySelector<HTMLElement>(".cm-openidea-lensInlineInner");
+    // The hint's inner box is absolutely positioned 12px past its zero-width anchor.
+    if (hint) width += Math.round(hint.getBoundingClientRect().width) + 12;
+    // The plugin message is a zero-width anchor too; its inner box carries the visible width.
+    const message = line.querySelector<HTMLElement>(".cm-plugin-after > span");
+    if (message) width += Math.round(message.getBoundingClientRect().width) + 8; // its own offset
     if (width === this.appliedWidth) return;
     this.appliedWidth = width;
     // Padding, not margin: the gap is virtual (it only moves the label), so the caret at the
     // line end stays next to the code. A blank line has no code to separate from: no gap.
     el.style.paddingLeft = this.blank ? "0" : width ? `calc(3ch + ${width}px)` : "";
+    // The label's box spans the virtual gap, but only its text is the blame: clip the hover and
+    // click region to the text so a pointer over the gap (where the lens message sits) does not
+    // open the commit tooltip.
+    el.style.clipPath = width ? `inset(0 0 0 ${width}px)` : "";
   }
 
   toDOM() {
@@ -106,11 +118,11 @@ class BlameWidget extends WidgetType {
     // nested frame, so a widget that goes away first simply skips.
     setTimeout(() => {
       if (!el.isConnected) return;
-      this.stepPastHint(el);
+      this.stepPastLineEnd(el);
       const line = el.closest(".cm-line");
       if (!line) return;
-      this.observer = new MutationObserver(() => this.stepPastHint(el));
-      this.observer.observe(line, { childList: true, subtree: true });
+      this.observer = new MutationObserver(() => this.stepPastLineEnd(el));
+      this.observer.observe(line, { childList: true, subtree: true, characterData: true });
     }, 0);
     if (!isUncommitted(this.line)) {
       el.setAttribute("role", "button");
@@ -241,7 +253,8 @@ export function inlineBlame(ctx: EditorDocContext): Extension {
           if (this.line) {
             const widget = Decoration.widget({
               widget: new BlameWidget(this.line, caret.text.trim().length === 0),
-              side: 1,
+              // After a plugin's line-end message (side 1): git hint | lens | blame.
+              side: 2,
             }).range(caret.to);
             this.view.dispatch({ effects: setInlineBlame.of(Decoration.set([widget])) });
           }

@@ -38,10 +38,27 @@
 .muted {
   color: var(--fg-muted);
 }
+/* A zero-width anchor at the line end with the message in an absolutely positioned inner box,
+   the way the code-vision hint is drawn: the annotation takes no part in the line's flow, so it
+   neither stretches the line nor moves the caret at the line end. */
 .after {
+  display: inline-block;
+  width: 0;
+  position: relative;
+  line-height: 1;
+  user-select: none;
+}
+.afterInner {
+  position: absolute;
+  left: var(--space-2);
+  bottom: -2px;
   white-space: pre;
-  margin-inline-start: calc(var(--space-2) / 2);
   color: var(--fg-muted);
+  /* Pinned to the line, a long message may run past the editor's edge; cap it like the hint. */
+  max-width: min(60ch, 50vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: auto;
 }
 
 /* Inline text follows the scheme's Error / Warning colours, the way Inspection Lens

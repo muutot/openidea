@@ -26,16 +26,17 @@ const colors: Record<string, string> = {
   muted: "var(--fg-muted)",
 };
 
-function currentSets(sets: DecorationSet[]) {
+function currentSets(sets: DecorationSet[], tree: boolean) {
   // Editor annotations follow the file, so a set applies wherever its file is open —
   // including a file outside this window's project. Tree decorations are per root.
+  if (!tree) return sets;
   const root = useProject.getState().project?.root;
-  return sets.filter((s) => s.tree || s.root === root);
+  return sets.filter((s) => s.root === root);
 }
 
 function updateTree(plugin: string, sets: DecorationSet[]) {
   const items = new Map<string, FileDecoration>();
-  for (const s of currentSets(sets))
+  for (const s of currentSets(sets, true))
     if (s.tree && s.file && (Object.hasOwn(colors, s.file.style) || s.file.note)) {
       items.set(s.path, {
         color: Object.hasOwn(colors, s.file.style) ? colors[s.file.style] : undefined,
@@ -65,6 +66,10 @@ function offset(doc: Text, pos: Range["start"]): number | null {
 }
 
 class AfterText extends WidgetType {
+  /** Last offset applied, so the observer does not rewrite the style on every keystroke. */
+  private appliedWidth = -1;
+  private observer: MutationObserver | undefined;
+
   constructor(
     readonly text: string,
     readonly style: string,
@@ -75,19 +80,50 @@ class AfterText extends WidgetType {
   override eq(other: AfterText) {
     return this.text === other.text && this.style === other.style && this.hover === other.hover;
   }
+  /**
+   * Line-end annotations stack left to right: the code-vision git hint, this message, then the
+   * inline blame. The hint is out of flow and the blame steps past it and this message itself
+   * (see inlineBlame.ts), so this one only steps past the hint. It can appear (or go away) after
+   * this widget mounted, hence the observer below.
+   */
+  private stepPastHint(el: HTMLElement) {
+    const line = el.closest(".cm-line");
+    if (!line) return;
+    const hint = line.querySelector<HTMLElement>(".cm-openidea-lensInlineInner");
+    // The hint's inner box is absolutely positioned 12px past its zero-width anchor.
+    const width = hint ? Math.round(hint.getBoundingClientRect().width) + 12 : 0;
+    if (width === this.appliedWidth) return;
+    this.appliedWidth = width;
+    el.style.marginLeft = width ? `${width}px` : "";
+  }
   override toDOM() {
+    // A zero-width anchor with the message in an absolutely positioned inner box, the way the
+    // code-vision hint is drawn: the annotation takes no part in the line's flow, so it neither
+    // stretches the line nor moves the caret at the line end.
     const span = document.createElement("span");
     span.className = styles.after ?? "";
-    // The gap before the message stays outside the styled text, so the severity colour and
-    // decoration underline the message alone rather than the leading spaces.
-    const gap = /^\s+/.exec(this.text)?.[0];
-    if (gap) span.appendChild(document.createTextNode(gap));
+    // A stable hook for the inline blame, which steps past this message (inlineBlame.ts).
+    span.classList.add("cm-plugin-after");
     const text = document.createElement("span");
-    text.className = this.style;
-    text.textContent = this.text.slice(gap?.length ?? 0);
+    text.className = `${styles.afterInner ?? ""} ${this.style}`;
+    text.textContent = this.text;
     if (this.hover) text.title = this.hover;
     span.appendChild(text);
+    // The element is only measurable once CodeMirror has inserted it: defer to the next task, not a
+    // nested frame, so a widget that goes away first simply skips.
+    setTimeout(() => {
+      if (!span.isConnected) return;
+      this.stepPastHint(span);
+      const line = span.closest(".cm-line");
+      if (!line) return;
+      this.observer = new MutationObserver(() => this.stepPastHint(span));
+      this.observer.observe(line, { childList: true, subtree: true, characterData: true });
+    }, 0);
     return span;
+  }
+  override destroy() {
+    this.observer?.disconnect();
+    this.observer = undefined;
   }
 }
 
@@ -95,7 +131,7 @@ export function decorationExtension(ctx: EditorDocContext) {
   const build = (doc: Text): CmDecorations => {
     const ranges = [];
     for (const sets of snapshots.values())
-      for (const set of currentSets(sets))
+      for (const set of currentSets(sets, false))
         if (!set.tree && String(set.path) === String(ctx.path)) {
           for (const item of set.items) {
             const className = Object.hasOwn(colors, item.style) ? styles[item.style] : undefined;
@@ -111,11 +147,12 @@ export function decorationExtension(ctx: EditorDocContext) {
                 ),
               );
             if (item.after) {
-              // `side: 0` keeps the annotation before other line-end widgets (Code Vision's
-              // author hint and usages lens are `side: 1`): the message hugs the code and the
-              // blame label follows it, as in Inspection Lens.
+              // The message belongs at the line end even when the diagnostic's range ends
+              // mid-line (a typo in the middle of a long line). `side: 1` keeps it after the
+              // caret there; the inline blame steps past it, so: git hint | lens | blame.
+              const end = doc.lineAt(to);
               ranges.push(
-                Decoration.widget({ widget: new AfterText(item.after, className, item.hover), side: 0 }).range(to),
+                Decoration.widget({ widget: new AfterText(item.after, className, item.hover), side: 1 }).range(end.to),
               );
             }
           }
