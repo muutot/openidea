@@ -1,0 +1,107 @@
+{
+  "properties": {
+    "useEditorFont": {
+      "type": "boolean",
+      "title": "Use editor font",
+      "description": "Draw inline messages with the editor font and severity colours. Turning this off draws them muted, closer to the surrounding text; OpenIDEA renders annotations with the editor font either way.",
+      "group": "Appearance",
+      "default": true
+    },
+    "maxDescriptionLength": {
+      "type": "integer",
+      "title": "Max description length",
+      "description": "Longest inline message in characters, per diagnostic. Zero means no limit.",
+      "group": "Appearance",
+      "default": 120
+    },
+    "hoverMode": {
+      "type": "string",
+      "title": "Hover mode",
+      "description": "What a hover over an annotation shows. Plugin annotations cannot bind click intents in OpenIDEA, so the two click modes differ in the tooltip detail: the first shows the message with its tool, rule id and related locations, the second the message alone.",
+      "group": "Behavior",
+      "enum": [
+        "Disabled",
+        "Left click shows intentions, middle click jumps to highlight",
+        "Left click jumps to highlight, middle click shows intentions"
+      ],
+      "default": "Left click shows intentions, middle click jumps to highlight"
+    },
+    "showAgent": {
+      "type": "boolean",
+      "title": "Agent",
+      "description": "Problems suggested by an AI agent. OpenIDEA reports none yet; the switch is kept for parity with PyCharm.",
+      "group": "Shown Severities",
+      "default": true
+    },
+    "showErrors": {
+      "type": "boolean",
+      "title": "Errors",
+      "description": "Example: \"totl\" is not defined.",
+      "group": "Shown Severities",
+      "default": true
+    },
+    "showWarnings": {
+      "type": "boolean",
+      "title": "Warnings",
+      "description": "Example: parameter \"name\" value is not used.",
+      "group": "Shown Severities",
+      "default": true
+    },
+    "showDebuggerSuggestions": {
+      "type": "boolean",
+      "title": "Debugger suggestions",
+      "description": "Problems the debugger reports. OpenIDEA reports none yet; the switch is kept for parity with PyCharm.",
+      "group": "Shown Severities",
+      "default": true
+    },
+    "showInformation": {
+      "type": "boolean",
+      "title": "Information",
+      "description": "Example: Import \"os\" is not accessed (reported as information).",
+      "group": "Shown Severities",
+      "default": true
+    },
+    "showWeakWarnings": {
+      "type": "boolean",
+      "title": "Weak warnings",
+      "description": "Unnecessary or deprecated code. Example: unused import.",
+      "group": "Shown Severities",
+      "default": true
+    },
+    "showServerProblems": {
+      "type": "boolean",
+      "title": "Server problems",
+      "description": "Problems the language server reports about itself, such as a crash or a failed request.",
+      "group": "Shown Severities",
+      "default": true
+    },
+    "showSyntaxErrors": {
+      "type": "boolean",
+      "title": "Syntax errors",
+      "description": "Parse errors. Example: Expected expression.",
+      "group": "Shown Severities",
+      "default": true
+    },
+    "showTypos": {
+      "type": "boolean",
+      "title": "Typos",
+      "description": "Spelling and grammar problems. Example: Typo: In word 'remot'.",
+      "group": "Shown Severities",
+      "default": true
+    },
+    "showStyleSuggestions": {
+      "type": "boolean",
+      "title": "Style suggestions",
+      "description": "Style and convention problems. Example: Unused import (style).",
+      "group": "Shown Severities",
+      "default": true
+    },
+    "showOther": {
+      "type": "boolean",
+      "title": "Other",
+      "description": "Hints and problems no other severity covers.",
+      "group": "Shown Severities",
+      "default": true
+    }
+  }
+}

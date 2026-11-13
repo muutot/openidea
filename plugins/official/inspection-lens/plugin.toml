@@ -1,0 +1,32 @@
+id = "openidea.inspection-lens"
+name = "Inspection Lens"
+version = "0.1.0"
+description = "Displays errors, warnings and other inspections inline at the end of the line, the way Inspection Lens / Error Lens does."
+authors = ["Muu"]
+license = "Apache-2.0"
+change-notes = "0.1.0 — first release: inline diagnostics from the Problems view, with appearance, hover and severity settings."
+categories = ["tools"]
+engines.openidea = "^1.6"
+wasm = "dist/plugin.wasm"
+activation = [
+  "on-startup-finished",
+  "on-event:file-opened",
+  "on-event:file-saved",
+  "on-event:editor-focused",
+  "on-event:file-closed",
+  "on-event:settings-changed",
+  "on-event:problems-changed",
+  "on-command:*",
+]
+
+[capabilities]
+required = ["project.read", "events", "storage"]
+
+[[contributes.commands]]
+id = "refresh"
+title = "Inspection Lens: Refresh"
+category = "Inspection Lens"
+
+[contributes.settings]
+title = "Inspection Lens"
+schema = "settings.schema.json"
