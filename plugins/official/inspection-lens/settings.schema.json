@@ -31,77 +31,118 @@
       "title": "Agent",
       "description": "Problems suggested by an AI agent. OpenIDEA reports none yet; the switch is kept for parity with PyCharm.",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "Suggestion from an AI agent",
+        "style": "muted"
+      }
     },
     "showErrors": {
       "type": "boolean",
       "title": "Errors",
-      "description": "Example: \"totl\" is not defined.",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "\"totl\" is not defined.",
+        "style": "error"
+      }
     },
     "showWarnings": {
       "type": "boolean",
       "title": "Warnings",
-      "description": "Example: parameter \"name\" value is not used.",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "parameter \"name\" value is not used.",
+        "style": "warning"
+      }
     },
     "showDebuggerSuggestions": {
       "type": "boolean",
       "title": "Debugger suggestions",
       "description": "Problems the debugger reports. OpenIDEA reports none yet; the switch is kept for parity with PyCharm.",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "Value of x is available at the breakpoint",
+        "style": "info"
+      }
     },
     "showInformation": {
       "type": "boolean",
       "title": "Information",
-      "description": "Example: Import \"os\" is not accessed (reported as information).",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "Import \"os\" is not accessed.",
+        "style": "info"
+      }
     },
     "showWeakWarnings": {
       "type": "boolean",
       "title": "Weak warnings",
-      "description": "Unnecessary or deprecated code. Example: unused import.",
+      "description": "Unnecessary or deprecated code.",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "unused import",
+        "style": "weak"
+      }
     },
     "showServerProblems": {
       "type": "boolean",
       "title": "Server problems",
       "description": "Problems the language server reports about itself, such as a crash or a failed request.",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "language server crashed",
+        "style": "error"
+      }
     },
     "showSyntaxErrors": {
       "type": "boolean",
       "title": "Syntax errors",
-      "description": "Parse errors. Example: Expected expression.",
+      "description": "Parse errors.",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "Expected expression",
+        "style": "error"
+      }
     },
     "showTypos": {
       "type": "boolean",
       "title": "Typos",
-      "description": "Spelling and grammar problems. Example: Typo: In word 'remot'.",
+      "description": "Spelling and grammar problems.",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "Typo: In word 'remot'.",
+        "style": "typo"
+      }
     },
     "showStyleSuggestions": {
       "type": "boolean",
       "title": "Style suggestions",
-      "description": "Style and convention problems. Example: Unused import (style).",
+      "description": "Style and convention problems.",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "Unused import (style)",
+        "style": "weak"
+      }
     },
     "showOther": {
       "type": "boolean",
       "title": "Other",
       "description": "Hints and problems no other severity covers.",
       "group": "Shown Severities",
-      "default": true
+      "default": true,
+      "example": {
+        "text": "Hints and notes",
+        "style": "muted"
+      }
     }
   }
 }
