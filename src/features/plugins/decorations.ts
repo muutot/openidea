@@ -83,18 +83,23 @@ class AfterText extends WidgetType {
   /**
    * Line-end annotations stack left to right: the code-vision git hint, this message, then the
    * inline blame. The hint is out of flow and the blame steps past it and this message itself
-   * (see inlineBlame.ts), so this one only steps past the hint. It can appear (or go away) after
-   * this widget mounted, hence the observer below.
+   * (see inlineBlame.ts), so this one only steps past the hint — on the inner box's offset, not
+   * the anchor's margin: a margin would shift the in-flow siblings (the blame) too, and the
+   * blame would count the hint a second time. It can appear (or go away) after this widget
+   * mounted, hence the observer below.
    */
   private stepPastHint(el: HTMLElement) {
     const line = el.closest(".cm-line");
-    if (!line) return;
+    const inner = el.firstElementChild as HTMLElement | null;
+    if (!line || !inner) return;
     const hint = line.querySelector<HTMLElement>(".cm-openidea-lensInlineInner");
     // The hint's inner box is absolutely positioned 12px past its zero-width anchor.
     const width = hint ? Math.round(hint.getBoundingClientRect().width) + 12 : 0;
     if (width === this.appliedWidth) return;
     this.appliedWidth = width;
-    el.style.marginLeft = width ? `${width}px` : "";
+    // The stylesheet parks the message 8px past the anchor; shift it past the hint as well.
+    if (width) inner.style.left = `${width + 8}px`;
+    else inner.style.removeProperty("left");
   }
   override toDOM() {
     // A zero-width anchor with the message in an absolutely positioned inner box, the way the
