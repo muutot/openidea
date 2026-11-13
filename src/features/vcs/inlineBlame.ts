@@ -155,9 +155,17 @@ export function inlineBlame(ctx: EditorDocContext): Extension {
       private readonly off: (() => void)[];
       private generation = 0;
       private destroyed = false;
+      /** The element the pointer last moved over; the hover belongs to the label alone. */
+      hoverTarget: EventTarget | null = null;
       line: BlameLine | undefined;
 
       constructor(readonly view: EditorView) {
+        // Record the real pointer target: CodeMirror resolves a hover over any line-end
+        // widget (a plugin lens, a code-vision hint) to the same offset as the blame, so
+        // position alone cannot tell the label apart from its neighbours.
+        view.dom.addEventListener("mousemove", (e) => {
+          this.hoverTarget = e.target;
+        });
         this.off = [
           useVcs.subscribe((s, prev) => {
             if (s.version !== prev.version) this.invalidate();
@@ -282,6 +290,10 @@ export function inlineBlame(ctx: EditorDocContext): Extension {
         const line = instance?.line;
         const end = view.state.doc.lineAt(view.state.selection.main.head).to;
         if (!instance || !line || pos !== end || side < 0) return null;
+        // The lens and other line-end widgets share the blame's offset, so a hover over
+        // them resolves here too; only the label itself opens the commit tooltip.
+        const target = instance.hoverTarget;
+        if (!(target instanceof Element) || !target.closest(".cm-vcs-inline-blame")) return null;
         const message = await instance.message(line);
         if (view.plugin(plugin)?.line !== line) return null;
         return {

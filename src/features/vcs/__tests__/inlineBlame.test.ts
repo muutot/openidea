@@ -55,6 +55,11 @@ function editor(doc = "one\ntwo\nthree", context = ctx) {
 
 const hint = () => view?.dom.querySelector<HTMLElement>(".cm-vcs-inline-blame");
 const tick = () => vi.advanceTimersByTimeAsync(300);
+/** The hover belongs to the label: put the pointer on it before activating, as a user would. */
+const hoverLabel = (v: EditorView, pos: number) => {
+  hint()!.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+  activateHover(v, pos, 1);
+};
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -124,7 +129,7 @@ describe("current line decoration", () => {
     mocks.log.mockResolvedValue({ status: "ok", data: [{ message }] });
     const v = editor();
     await tick();
-    activateHover(v, 3, 1);
+    hoverLabel(v, 3);
     await vi.advanceTimersByTimeAsync(0);
     expect(hasHoverTooltips(v.state)).toBe(true);
     const tooltip = v.dom.querySelector(".cm-vcs-inline-blame-tooltip");
@@ -133,7 +138,7 @@ describe("current line decoration", () => {
     expect(tooltip?.textContent).toContain(alice.commit);
     expect(tooltip?.textContent).toContain(new Date(alice.timeMs!).toLocaleString());
     v.dispatch({ effects: closeHoverTooltips });
-    activateHover(v, 3, 1);
+    hoverLabel(v, 3);
     await vi.advanceTimersByTimeAsync(0);
     expect(mocks.log).toHaveBeenCalledTimes(1);
     v.dispatch({ selection: { anchor: 4 } });
@@ -144,11 +149,30 @@ describe("current line decoration", () => {
     mocks.log.mockResolvedValue({ status: "ok", data: [{ message: "Full message" }] });
     const v = editor();
     await tick();
-    activateHover(v, 3, 1);
+    hoverLabel(v, 3);
     await vi.advanceTimersByTimeAsync(0);
     expect(hasHoverTooltips(v.state)).toBe(true);
     settings(false);
     expect(hasHoverTooltips(v.state)).toBe(false);
+  });
+
+  it("keeps the commit tooltip closed when the pointer is on a line-end lens, not the label", async () => {
+    mocks.log.mockResolvedValue({ status: "ok", data: [{ message: "Full message" }] });
+    const v = editor();
+    await tick();
+    // A plugin lens shares the blame's line-end offset; hovering it must not open the blame.
+    const lens = document.createElement("span");
+    lens.className = "cm-plugin-lens";
+    v.dom.querySelector(".cm-line")!.appendChild(lens);
+    lens.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+    activateHover(v, 3, 1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(hasHoverTooltips(v.state)).toBe(false);
+    expect(mocks.log).not.toHaveBeenCalled();
+    // Moving onto the label itself still opens it.
+    hoverLabel(v, 3);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(hasHoverTooltips(v.state)).toBe(true);
   });
 
   it("refetches edits, saves and VCS refreshes", async () => {
