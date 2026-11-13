@@ -16,9 +16,16 @@ export function reportProblems(): () => void {
     if (!useProject.getState().project) return;
     const map = useProblems.getState().map;
     const files: FileProblems[] = [];
-    for (const [path, sources] of map)
-      if (reset || reported.get(path) !== sources) files.push({ path, items: [...sources.values()].flat() });
-    if (!reset) for (const path of reported.keys()) if (!map.has(path)) files.push({ path, items: [] });
+    for (const [path, sources] of map) {
+      if (!reset && reported.get(path) === sources) continue;
+      // Per producer: the host records diagnostics under the producer's name, so a
+      // file's items must arrive split, or one producer's clear wipes the others.
+      for (const [, items] of sources) files.push({ path, items: [...items] });
+      if (!sources.size) files.push({ path, items: [] });
+    }
+    if (!reset)
+      for (const [path, sources] of reported)
+        if (!map.has(path)) for (const _source of sources.keys()) files.push({ path, items: [] });
     if (!files.length && !reset) return;
     const wasReset = reset;
     reported = map;
