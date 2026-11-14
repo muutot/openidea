@@ -55,11 +55,10 @@ import {
   classLocation,
   declarationKey,
   forgetInheritanceGraph,
-  inheritanceIndex,
   methodInOutline,
-  pythonInheritanceGraph,
-  subclassMap,
+  projectPythonIndex,
   type InheritanceIndex,
+  type PythonIndex,
 } from "./inheritanceGraph";
 import styles from "./LineMarkers.module.css";
 
@@ -152,7 +151,7 @@ export interface MarkerDeps {
    * `typeHierarchyProvider`, so ↑/↓ are computed from this graph instead.
    * Absent for languages whose servers do provide one (Java, Go, ...).
    */
-  inheritance?: () => Promise<ClassInheritance[]>;
+  inheritance?: () => Promise<PythonIndex>;
   /**
    * The file a Python `import` path names (`from a.b import X`), `.x` resolved
    * relative to `from`. Disambiguates a base name two files both declare.
@@ -170,7 +169,7 @@ export interface MarkerCache {
   entries: Map<string, CacheEntry>;
   unsupported: Set<MarkerGroup>;
   /** The Python inheritance graph for this document version, fetched once per cache. */
-  inheritance?: Promise<ClassInheritance[] | null>;
+  inheritance?: Promise<PythonIndex | null>;
 }
 
 export const emptyCache = (): MarkerCache => ({ entries: new Map(), unsupported: new Set() });
@@ -196,8 +195,8 @@ export async function fillMarkers(
   // A Python inheritance graph answers both groups even when the language server
   // has no type hierarchy: it must keep the candidates alive through the LSP
   // "unsupported" bookkeeping, or the fallback would never get to run.
-  const graph = deps.inheritance ? await (cache.inheritance ??= deps.inheritance().catch(() => null)) : null;
-  const fallback = (graph?.length ?? 0) > 0;
+  const python = deps.inheritance ? await (cache.inheritance ??= deps.inheritance().catch(() => null)) : null;
+  const fallback = (python?.classes.length ?? 0) > 0;
   const down =
     groups.has("inheritors") && (fallback || !cache.unsupported.has("inheritors"))
       ? candidates.filter((c) => c.inheritable && cache.entries.get(candidateKey(c))?.inheritors === undefined)
@@ -247,10 +246,10 @@ export async function fillMarkers(
   }
   // Python without a type-hierarchy provider: the IDE's inheritance graph holds every
   // `class X(A)` of the project, so ↑/↓ are computed from it instead.
-  const index = graph ? inheritanceIndex(graph, deps) : null;
+  // The project index is shared with the hierarchy and the inspections.
+  const index = python?.index ?? null;
   const byName = index?.byName ?? new Map<string, ClassInheritance[]>();
-  // Direct subclasses keyed by the declaration each base resolves to.
-  const subclassesOf = index ? await subclassMap(index) : new Map<string, ClassInheritance[]>();
+  const subclassesOf = python?.subclasses ?? new Map<string, ClassInheritance[]>();
   const classOf = (c: MarkerCandidate): ClassInheritance | null => {
     // A class candidate is its own declaration; a method's is the `owner` it records.
     const at = c.method ? c.owner : { line: c.line, col: c.col };
@@ -731,7 +730,7 @@ function markerDeps(ctx: EditorDocContext, items: OutlineItem[], request: Reques
     readFiles: readManyFileLines,
     // Python servers answer no type hierarchy (basedpyright, pyrefly): the IDE's
     // own index knows every `class X(Base)` of the project, attached roots included.
-    inheritance: ctx.language === "python" ? pythonInheritanceGraph : undefined,
+    inheritance: ctx.language === "python" ? () => projectPythonIndex() : undefined,
     // A base name several modules declare is resolved through the file's imports.
     moduleFile:
       ctx.language === "python" ? (name, from) => lspRequest(() => commands.navResolveModule(name, from)) : undefined,

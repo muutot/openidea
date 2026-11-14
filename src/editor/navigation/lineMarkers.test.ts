@@ -34,7 +34,13 @@ import {
   openMarkerTargets,
   type MarkerDeps,
 } from "./implementationGutter";
-import { importBindings } from "./inheritanceGraph";
+import {
+  importBindings,
+  inheritanceIndex,
+  subclassMap,
+  type InheritanceDeps,
+  type PythonIndex,
+} from "./inheritanceGraph";
 
 const ALL = enabledGroups({ showGutterIcons: true, gutterIconsDisabled: [] });
 
@@ -205,6 +211,12 @@ describe("marker candidates", () => {
   });
 });
 
+/** The shared project index the gutter takes, built from a graph for these deps. */
+async function pythonIndex(graph: ClassInheritance[], deps: InheritanceDeps): Promise<PythonIndex> {
+  const index = inheritanceIndex(graph, deps);
+  return { classes: graph, index, subclasses: await subclassMap(index) };
+}
+
 /** A server answering implementation and type hierarchy requests over the files above. */
 function server(
   impls: Record<string, Location[]>,
@@ -240,7 +252,9 @@ function server(
     inheritance: inheritance
       ? async () => {
           calls.inheritance++;
-          return inheritance;
+          return pythonIndex(inheritance, {
+            readFiles: async (paths) => new Map(paths.map((p) => [p, FILES[p] ?? null])),
+          });
         }
       : undefined,
   });
@@ -273,7 +287,13 @@ function pythonServer(
     },
     inheritance: async () => {
       calls.inheritance++;
-      return inheritance;
+      return pythonIndex(inheritance, {
+        readFiles: async (paths) => new Map(paths.map((p) => [p, files[p] ?? null])),
+        moduleFile: async (module, from) => {
+          calls.modules.push(`${module}@${from}`);
+          return modules[`${module}@${from}`] ?? null;
+        },
+      });
     },
   });
   return { calls, deps };
