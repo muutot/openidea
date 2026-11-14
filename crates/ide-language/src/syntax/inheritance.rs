@@ -43,7 +43,7 @@ fn extract(tree: &Tree, text: &str) -> Vec<ClassBases> {
         // Selection-range start of the class: its name identifier (`class Foo`
         // -> `Foo`), matching `outline.rs` and the gutter marker candidates.
         let range = idx.range(name_node.start_byte(), name_node.end_byte());
-        let bases = node.child_by_field_name("superclasses").map(|args| base_names(args, text)).unwrap_or_default();
+        let bases = class_base_names(node, text);
         out.push(ClassBases { name, line: range.start.line, col: range.start.col, bases });
     });
     out
@@ -65,6 +65,12 @@ fn visit(cursor: &mut tree_sitter::TreeCursor, f: &mut impl FnMut(Node)) {
             }
         }
     }
+}
+
+/// Bare base names of a `class_definition` node (`[]` without a superclass list).
+/// Shared with the outline query, whose tags carry the bases of a class definition.
+pub(crate) fn class_base_names(class: Node, text: &str) -> Vec<String> {
+    class.child_by_field_name("superclasses").map(|args| base_names(args, text)).unwrap_or_default()
 }
 
 fn base_names(args: Node, text: &str) -> Vec<String> {
@@ -114,6 +120,20 @@ mod tests {
     #[test]
     fn no_bases() {
         assert_eq!(shape("class A: pass"), vec![("A".to_owned(), 0, 6, vec![])]);
+    }
+
+    /// The project index stores bases on the symbol tags, so the outline query must
+    /// carry them too (one parse for both, not a second pass over every file).
+    #[test]
+    fn tags_carry_class_bases() {
+        static S: std::sync::OnceLock<Syntax> = std::sync::OnceLock::new();
+        let s = S.get_or_init(Syntax::new);
+        let tags = s.tags(&LanguageId::new("python"), "class A: pass\nclass B(A, pkg.C):\n    def m(self): pass\n");
+        let bases_of = |name: &str| tags.iter().find(|t| t.name == name).map(|t| t.bases.clone()).unwrap_or_default();
+        assert!(bases_of("A").is_empty());
+        assert_eq!(bases_of("B"), vec!["A".to_owned(), "C".to_owned()]);
+        // Only classes carry bases; the method's tag stays empty.
+        assert!(bases_of("m").is_empty());
     }
 
     #[test]
