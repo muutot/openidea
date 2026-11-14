@@ -2,7 +2,7 @@ use super::doc::blocking;
 use crate::Host;
 use crate::Project;
 use crate::rpc::Dispatcher;
-use ide_core::{DocId, IdeResult, IpcPath, LanguageId, Location, Pos};
+use ide_core::{DocId, IdeResult, IpcPath, Location, Pos};
 use ide_index::{ExtensionCount, FileMatch, IndexStatus, SymbolFilter, SymbolMatch};
 use ide_language::{FileReference, WebReference};
 use ide_workspace::file_refs::{self, PathCompletion};
@@ -192,29 +192,26 @@ pub async fn nav_index_definitions(
 }
 
 /// Every Python class in the project (attached dependency roots included) and its base
-/// names. The index covers content roots, so this is the whole-project answer the UI uses
-/// for inheritance gutter markers when no type-hierarchy provider exists.
+/// names, answered from the project index: its symbols already carry the bases, and it
+/// covers content roots, so this is the whole-project answer the UI uses for inheritance
+/// gutter markers when no type-hierarchy provider exists. No file is parsed here.
 pub async fn nav_inheritance(host: &Host, window: &str) -> IdeResult<Vec<ClassInheritance>> {
     let project = host.project(window)?;
-    let syntax = host.syntax();
     blocking(move || {
-        let python = LanguageId::new("python");
-        let files = project.index.files_with_extensions(&["py".into(), "pyi".into()], 20_000);
-        let mut out = Vec::new();
-        for path in files {
-            // Prefer the open (possibly unsaved) buffer, else the file on disk.
-            let Ok(text) = project.text_of(&path) else { continue };
-            for class in syntax.class_bases(&python, &text) {
-                out.push(ClassInheritance {
-                    path: IpcPath::from(path.clone()),
-                    line: class.line,
-                    col: class.col,
-                    name: class.name,
-                    bases: class.bases,
-                });
-            }
-        }
-        Ok(out)
+        Ok(project
+            .index
+            .inheritance()
+            .into_iter()
+            // The index holds classes of every language; the graph is Python's.
+            .filter(|c| matches!(c.path.extension().and_then(std::ffi::OsStr::to_str), Some("py" | "pyi")))
+            .map(|c| ClassInheritance {
+                path: IpcPath::from(c.path),
+                line: c.range.start.line,
+                col: c.range.start.col,
+                name: c.name,
+                bases: c.bases,
+            })
+            .collect())
     })
     .await
 }
