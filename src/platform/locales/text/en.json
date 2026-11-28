@@ -4430,5 +4430,8 @@
   "Keep Key": "Keep Key",
   "Drop Index": "Drop Index",
   "Keep Index": "Keep Index",
-  "SQLite cannot drop the index of a primary key or unique constraint.": "SQLite cannot drop the index of a primary key or unique constraint."
+  "SQLite cannot drop the index of a primary key or unique constraint.": "SQLite cannot drop the index of a primary key or unique constraint.",
+  "Find in Documentation": "Find in Documentation",
+  "Previous Match": "Previous Match",
+  "Next Match": "Next Match"
 }

@@ -10962,5 +10962,8 @@
   "Keep Key": "保留键",
   "Drop Index": "删除索引",
   "Keep Index": "保留索引",
-  "SQLite cannot drop the index of a primary key or unique constraint.": "SQLite 无法删除主键或唯一约束的索引。"
+  "SQLite cannot drop the index of a primary key or unique constraint.": "SQLite 无法删除主键或唯一约束的索引。",
+  "Find in Documentation": "在文档中查找",
+  "Previous Match": "上一个匹配项",
+  "Next Match": "下一个匹配项"
 }
